@@ -1,37 +1,27 @@
+--!strict
+local Package = script
+local Packages = Package.Parent
+
+-- Services
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-if RunService:IsClient() then
-	local sync = ReplicatedStorage:WaitForChild("TimeSync")
-	local serverOffset
-	local lastUpdate = 0
-	RunService.RenderStepped:Connect(function(deltaTime)
-		if tick() - lastUpdate > 5 then
-			lastUpdate = tick()
-			serverOffset = sync:InvokeServer(tick())
-		end
-	end)
-	return function()
-		if serverOffset then
-			return tick() + serverOffset
-		else
-			return nil
-		end
-	end
-else
-	local sync = Instance.new("RemoteFunction", ReplicatedStorage)
-	sync.Name = "TimeSync"
-	sync.OnServerInvoke = function(player, proposedTick)
-		local t = tick()
-		local ping = math.clamp(player:GetNetworkPing(), 0, 1000)
+-- Packages
+local _Maid = require(Packages:WaitForChild("Maid"))
+local _Signal = require(Packages:WaitForChild("Signal"))
+local _NetworkUtil = require(Packages:WaitForChild("NetworkUtil"))
 
-		local pDelay = ping/1000
-		local offset = t - pDelay - proposedTick
-
-		return offset
-	end
-	return function ()
+local UPDATE_KEY = "GET_TIMESYNC_OFFSET"
+local offset = 0
+if RunService:IsServer() then
+	_NetworkUtil.onServerInvoke(UPDATE_KEY, function(player: Player)
 		return tick()
-	end
+	end)
+end
+if RunService:IsClient() then
+	local baseTick = _NetworkUtil.invokeServer(UPDATE_KEY)
+	offset = tick() - baseTick
 end
 
+return function()
+	return tick() - offset
+end
